@@ -36,9 +36,3 @@ up the physical address associated with a virtual address.
 6. mems_free
 The `mems_free` function frees the memory pointed to by a MeMS virtual address and adds it to the free list for
 reuse i.e. it converts a process into a hole. 
-
-- Usage
-1. Call `mems_init` at the beginning of the program to initialize the MeMS system.
-2. Use `mems_malloc` to allocate memory dynamically.
-3. When you are done with the allocated memory, use `mems_free` to release it.
-4. Finally, call `mems_finish` to clean up and release any remaining memory at the end of the program.
