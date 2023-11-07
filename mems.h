@@ -19,7 +19,6 @@ REFER DOCUMENTATION FOR MORE DETAILS ON FUNSTIONS AND THEIR FUNCTIONALITY
 #include <unistd.h>
 
 
-
 /*
 Use this macro where ever you need PAGE_SIZE.
 As PAGESIZE can differ system to system we should have flexibility to modify this 
@@ -56,7 +55,7 @@ int originalspace=0;
 int spaceused=0;
 int total_space_used;
 void space(){
-  int total_space_used= originalspace-spaceused;
+  int total_space_used= spaceused-originalspace;
   printf("total_space used %d\n", total_space_used);
 }
 
@@ -76,6 +75,8 @@ struct MainNode* main_chain_head;
 unsigned long virtual_add_start=0;
 unsigned long physical_add=0;
 int virtual_count=0;
+
+
 void mems_init(){
   main_chain_head=NULL;
   virtual_add_start=150;
@@ -99,6 +100,7 @@ void mems_finish(){
         }   
         main_node = main_node->main_next;
     }
+    printf("mems_finish successfully executed! ");
 }
 
 
@@ -165,6 +167,7 @@ void* mems_malloc(size_t size){
           struct Segment* new_segment= mmap(NULL, new_segment_size, PROT_READ | PROT_WRITE, FLAGS, -1, 0);
           new_segment->typeOfSegment=1;
           new_segment->size=new_segment_size;
+          //printf("Segment size: %zu\n", new_segment1_size);
           new_segment->prev=segment->prev;
           spaceused+=size;
           
@@ -202,6 +205,7 @@ void* mems_malloc(size_t size){
           virtual_count++;
           virtual_address = (void*)virtual_add_start;
           physical_address = physical_add;
+          printf("Mapping successful - Virtual Address: %ld, Physical Address: %p\n", (long)virtual_address, physical_address);
           mapping[0][addressMapIndex] = virtual_address;
           mapping[1][addressMapIndex] = physical_address;
           addressMapIndex++;
@@ -258,6 +262,7 @@ void mems_free(void *v_ptr){
 int flag=1;
   struct MainNode* main_node=main_chain_head;
       struct Segment* initialSegment = &main_node->sub_chain;
+      mappedPageNumber-=1;
       
       while (main_node != NULL) {
         struct Segment* segment = &(main_node->sub_chain);
