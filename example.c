@@ -55,7 +55,7 @@ int originalspace=0;
 int spaceused=0;
 int total_space_used;
 void space(){
-  int total_space_used= originalspace-spaceused;
+  int total_space_used= spaceused-originalspace;
   printf("total_space used %d\n", total_space_used);
 }
 
@@ -75,6 +75,8 @@ struct MainNode* main_chain_head;
 unsigned long virtual_add_start=0;
 unsigned long physical_add=0;
 int virtual_count=0;
+
+
 void mems_init(){
   main_chain_head=NULL;
   virtual_add_start=150;
@@ -98,6 +100,7 @@ void mems_finish(){
         }   
         main_node = main_node->main_next;
     }
+    printf("mems_finish successfully executed! ");
 }
 
 
@@ -259,6 +262,7 @@ void mems_free(void *v_ptr){
 int flag=1;
   struct MainNode* main_node=main_chain_head;
       struct Segment* initialSegment = &main_node->sub_chain;
+      mappedPageNumber-=1;
       
       while (main_node != NULL) {
         struct Segment* segment = &(main_node->sub_chain);
