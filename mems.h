@@ -9,6 +9,9 @@ you can also make additional helper functions a you wish
 REFER DOCUMENTATION FOR MORE DETAILS ON FUNSTIONS AND THEIR FUNCTIONALITY
 */
 // add other headers as required
+
+//ASSUMPTION 1: Assuming that the initial structure of free list structure has a main node with its initial segment with HOLE status. 
+//ASSUMPTION 2: Count of mapped pages starts from the node created when there is a new request for making a new node connected to the main node of the free list structure, i.e. excluding the initial main node. 
 #include<stdio.h>
 #include<stdlib.h>
 #include <string.h>
@@ -36,13 +39,10 @@ void* virtual_address=NULL;
 void* physical_address=NULL;
 struct Segment {
     int initial_size;
-    size_t size; //ps / node
+    size_t size; 
     struct Segment* next;
     struct Segment* prev;
     int typeOfSegment;
-};
-struct SubChain {
-    struct Segment* head;
 };
 struct MainNode {
     int double_data;
@@ -52,8 +52,18 @@ struct MainNode {
   struct MainNode* main_next;
   struct MainNode* main_prev;
 };
+int originalspace=0;
+int spaceused=0;
+int total_space_used;
+void space(){
+  int total_space_used= originalspace-spaceused;
+  printf("total_space used %d\n", total_space_used);
+}
 
-
+void ununsed(){
+    int unused_space= originalspace-total_space_used;
+    //printf("totoal unused space %d\n",unused_space);
+}
 /*
 Initializes all the required parameters for the MeMS system. The main parameters to be initialized are:
 1. the head of the free list i.e. the pointer that points to the head of the free list
@@ -66,12 +76,6 @@ struct MainNode* main_chain_head;
 unsigned long virtual_add_start=0;
 unsigned long physical_add=0;
 int virtual_count=0;
-// struct phy_vir_mapping{
-// void* virtual_address;
-// void* physical_address;
-// };
-// struct phy_vir_mapping mapping[2][100];
-// int addressMapIndex[2] = {0, 0};
 void mems_init(){
   main_chain_head=NULL;
   virtual_add_start=150;
@@ -110,29 +114,46 @@ by adding it to the free list.
 Parameter: The size of the memory the user program wants
 Returns: MeMS Virtual address (that is created by MeMS)
 */ 
-
-void create(){
-    struct MainNode *new_node=mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, FLAGS, -1, 0);
-    new_node->sub_chain.next=NULL;
-    new_node->sub_chain.prev=NULL;
-    new_node->main_next=NULL;
-    new_node->main_prev=NULL;
+int allocate=1;
+void create() {
+    struct MainNode *new_node = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, FLAGS, -1, 0);
+    // spaceused+=IOPOL_VFS_NOCACHE_WRITE_FS_BLKSIZE_ON
+    mappedPageNumber++;
+    originalspace+=new_node->size;
+    struct MainNode *temp;
+    if (main_chain_head == NULL) {
+        main_chain_head = new_node;
+        temp= new_node;
+        new_node->sub_chain.next=NULL;
+        new_node->sub_chain.prev=NULL;
+        new_node->size=PAGE_SIZE;
+    } else {
+        main_chain_head->main_next = new_node;
+        new_node->main_prev = main_chain_head;
+        main_chain_head = new_node;
+    }
+    struct Segment* new_segment = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, FLAGS, -1, 0);
+    new_segment->size = PAGE_SIZE;
+    new_segment->typeOfSegment = HOLE;
+    new_segment->next = NULL;
+    new_node->sub_chain.next = new_segment;
+    new_segment->prev = &(new_node->sub_chain);
 }
 void* mems_malloc(size_t size){
-
   if (size == 0) {
         return NULL; 
     }
+    if (main_chain_head == NULL) {
+        create();
+    }
       struct MainNode* main_node=main_chain_head;
-      struct Segment* initialSegment = &main_node->sub_chain;
-      
       while (main_node != NULL) {
-        struct SubChain* sub_chainn = &(main_node->sub_chain);
-        struct Segment* segment = &main_node->sub_chain;
+        struct Segment* segment = &(main_node->sub_chain);
         while(segment!=NULL){
-        if(segment->size=size){
+        if(segment->size==size){
           if(segment->typeOfSegment==0){
         segment->size=size;
+        spaceused+=segment->size;
         segment->typeOfSegment=1;
         }
         }
@@ -144,7 +165,8 @@ void* mems_malloc(size_t size){
           struct Segment* new_segment= mmap(NULL, new_segment_size, PROT_READ | PROT_WRITE, FLAGS, -1, 0);
           new_segment->typeOfSegment=1;
           new_segment->size=new_segment_size;
-          new_segment->prev=sub_chainn->head;
+          new_segment->prev=segment->prev;
+          spaceused+=size;
           
           struct Segment* new_segment1= mmap(NULL, new_segment1_size, PROT_READ | PROT_WRITE, FLAGS, -1, 0);
           new_segment1->typeOfSegment=0;
@@ -157,10 +179,11 @@ void* mems_malloc(size_t size){
           segment=segment->next;
           }
           main_node = main_node->main_next;
-          mappedPageNumber+=1;
+
         }
         
         void* newSegment = mmap(NULL, size, PROT_READ | PROT_WRITE, FLAGS, -1, 0);
+        mappedPageNumber++;
         if (newSegment == MAP_FAILED) {
             perror("mmap failed");
             return NULL;
@@ -173,29 +196,17 @@ void* mems_malloc(size_t size){
         if (main_chain_head != NULL) {
             main_chain_head->main_prev = newNODe;
             main_chain_head->main_next=NULL;
-            mappedPageNumber+=1;
         }
-      
-          //unsigned long allocated_address = virtual_add_start;
           virtual_add_start += size;
           physical_add=newSegment+size;
           virtual_count++;
-          //mapping[virtual_count].virtual_address = virtual_add_start;
-          //mapping[virtual_count].physical_address = physical_add;
           virtual_address = (void*)virtual_add_start;
-          //int* int_ptr = (int*)virtual_address;
-//printf("Value stored in the void pointer: %p\n", virtual_address);
           physical_address = physical_add;
-          //int* int_ptr1 = (int*)physical_address;
-//printf("Value stored in the void pointer: %ld\n", (long)physical_address);
           mapping[0][addressMapIndex] = virtual_address;
           mapping[1][addressMapIndex] = physical_address;
-          //printf("Mapping successful - Virtual Address: %p, Physical Address: %p\n", virtual_address, physical_address);
           addressMapIndex++;
-          //printf("%d",virtual_count);
           return virtual_add_start;
-} 
-
+}
 
 
 /*
@@ -206,33 +217,15 @@ this function print the stats of the MeMS system like
 Parameter: Nothing
 Returns: Nothing but should print the necessary information on STDOUT
 */
-// void mems_print_stats(){
-
-// }
 void mems_print_stats() {
   printf("Total Mapped pages: %d\n", mappedPageNumber);
     int node_number = 1;
     while (main_chain_head!= NULL) {
-        // Print information about the main node
-        printf("Node %d:\n", node_number);
-        printf("  Address: %p\n", main_chain_head->main_next);
-        printf("  Size: %zu\n", main_chain_head->size);
-
-        // Traverse the sub-chain and print information about each segment
+        //printf("  Address: %p\n", main_chain_head->main_next);
+        printf("size of main chain head: %zu\n", main_chain_head->size);
+        space();
+        ununsed();
         int segment_number = 1;
-
-        // while (segment != NULL) {
-        //     printf("  Segment %d:\n", segment_number);
-        //     printf("  Address: %p\n", segment);
-        //     printf("  Size: %zu\n", segment->size);
-        //     printf("  Type: %s\n", (segment->typeOfSegment == PROCESS) ? "PROCESS" : "HOLE");
-
-        //     // Move to the next segment in the sub-chain
-        //     segment = segment->next;
-        //     segment_number++;
-        // }
-
-        // Move to the next main node in the main chain
         main_chain_head = main_chain_head->main_next;
         node_number++;
     }
@@ -244,32 +237,12 @@ Returns the MeMS physical address mapped to ptr ( ptr is MeMS virtual address).
 Parameter: MeMS Virtual address (that is created by MeMS)
 Returns: MeMS physical address mapped to the passed ptr (MeMS virtual address).
 */
-// void *mems_get(void*v_ptr){
-
-// for (int row = 0; row < MAX_ROWS; row++) {
-//     for (int col = 0; col < MAX_COLS; col++) {
-//        if (mapping[row][col]==v_ptr) {
-//             //printf("Virtual address: %lu\tPhysical Address: %lu\n",(unsigned long)mapping[row][col],(unsigned long)mapping[col][row]); 
-//             printf("%d", mapping[1][col]);
-//             break;
-//             //printf("Value at Row %d, Column %d: %p\n", row, col, mapping[row][col]);
-//             //printf("Virtual address: %lu\tPhysical Address: %lu\n",(unsigned long)mapping[row][col],(unsigned long)mapping[col][row]);
-//         }
-//     }
-// }
-// }
 int flag=0;
 void* mems_get(void* v_ptr) {
-    // Loop through the mapping to find a matching virtual address
     v_ptr=2150;
     flag=1;
     for (int col = 0; col < MAX_COLS; col++) {
         if (mapping[0][col] == v_ptr) {
-          // printf("%lu", (long)mapping[0][col]);
-          // printf("%lu", (long)v_ptr);
-            //printf("Virtual address: %lu\tPhysical Address: %lu\n",(unsigned long)mapping[0][col],(unsigned long)mapping[1][col]);
-            //break;
-            // If a match is found, return the corresponding physical address
             return mapping[1][col];
 
         }
@@ -284,12 +257,10 @@ Returns: nothing
 void mems_free(void *v_ptr){
 int flag=1;
   struct MainNode* main_node=main_chain_head;
-      //main_chain_head->
       struct Segment* initialSegment = &main_node->sub_chain;
       
       while (main_node != NULL) {
-    struct SubChain* sub_chainn = &(main_node->sub_chain);
-        struct Segment* segment = &main_node->sub_chain;
+        struct Segment* segment = &(main_node->sub_chain);
         while (segment != NULL) {
         if ((unsigned long)main_node->start == virtual_add_start) {
         if(segment->next==NULL){
